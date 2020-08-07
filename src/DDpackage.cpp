@@ -713,7 +713,7 @@ namespace dd {
             }
 
             return r;
-        } else if (which == ad || which == noise || which == noNoise) {
+        } else if (which == ad) {
             ComplexValue aw{ a.w.r->val, a.w.i->val};
             ComplexValue bw{ b.w.r->val, b.w.i->val };
             const unsigned long i = CThash2(a.p, aw, b.p, bw, which);
@@ -762,7 +762,7 @@ namespace dd {
             CTable2[i].r = r.p;
             CTable2[i].rw.r = r.w.r->val;
             CTable2[i].rw.i = r.w.i->val;
-        } else if (which == ad || which == noise || which == noNoise) {
+        } else if (which == ad) {
 	        ComplexValue aw{ a.w.r->val, a.w.i->val };
 	        ComplexValue bw{ b.w.r->val, b.w.i->val };
             const unsigned long i = CThash2(a.p, aw, b.p, bw, which);
@@ -791,6 +791,46 @@ namespace dd {
         }
     }
 
+     unsigned long Package::NoiseHash(const unsigned short n_qubits, const unsigned short current_qubit, const Edge& a, const short line[]) {
+        unsigned long i = current_qubit;
+        for (unsigned short j = 0; j <= current_qubit; j++){
+                i = (i << 2u) + (10 * j) + (line[j]);
+//                printf("%u", line[j]);
+        }
+//        auto tmp = ((uintptr_t) a.p << 5u) + i + (uintptr_t) (a.w.r->val * 1000) + (uintptr_t) (a.w.i->val * 2000) & NoiseMASK;
+//        printf(" Pointer Hash: %lu Line Hash: %lu Hashed weights: %lu Hash value: %lu \n",((uintptr_t) a.p << 5u), i, (uintptr_t) (a.w.r->val * 1000) + (uintptr_t) (a.w.i->val * 2000), tmp);
+        return ((uintptr_t) a.p << 5u) + i + (uintptr_t) (a.w.r->val * 1000) + (uintptr_t) (a.w.i->val * 2000) & NoiseMASK;
+    }
+
+    Edge Package::Noiselookup(unsigned short n_qubits, unsigned short current_qubit, const short *line, const Edge &a) {
+        Edge r{};
+        r.p = nullptr;
+        const unsigned long i = NoiseHash(n_qubits, current_qubit, a, line);
+        if (NoiseTable[i].r == nullptr || NoiseTable[i].t != current_qubit) return r;
+        if (!equals(NoiseTable[i].a, a) || !CN::equals(NoiseTable[i].a.w, a.w)) return r;
+        if (!std::memcmp(NoiseTable[i].line, line, n_qubits * sizeof(short))) return r;
+
+        r.p = NoiseTable[i].r;
+        if (std::fabs(NoiseTable[i].rw.r) < CN::TOLERANCE && std::fabs(NoiseTable[i].rw.i) < CN::TOLERANCE) {
+            return DDzero;
+        } else {
+            r.w = cn.getCachedComplex(NoiseTable[i].rw.r, NoiseTable[i].rw.i);
+        }
+        return r;
+    }
+
+    void Package::NoiseInsert(unsigned short n_qubits, unsigned short current_qubit, const short *line, const Edge &manipulated_edge,
+                              const Edge &result) {
+        const unsigned long i = NoiseHash(n_qubits, current_qubit, manipulated_edge, line);
+        NoiseTable[i].n = n_qubits;
+        NoiseTable[i].t = current_qubit;
+        std::memcpy(NoiseTable[i].line, line, n_qubits * sizeof(short));
+        NoiseTable[i].a = manipulated_edge;
+        NoiseTable[i].r = result.p;
+        NoiseTable[i].rw.r = result.w.r->val;
+        NoiseTable[i].rw.i = result.w.i->val;
+    }
+
     unsigned short Package::TThash(const unsigned short n, const unsigned short t, const short line[]) {
         unsigned long i = t;
         for (unsigned short j = 0; j < n; j++){
@@ -800,6 +840,8 @@ namespace dd {
         }
         return i & TTMASK;
     }
+
+
 
     Edge Package::TTlookup(const unsigned short n, const unsigned short m, const unsigned short t, const short line[]) {
         Edge r{};
