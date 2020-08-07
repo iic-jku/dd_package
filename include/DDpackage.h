@@ -37,6 +37,8 @@ namespace dd {
 	constexpr unsigned short HASHMASK = NBUCKET - 1;  // must be nbuckets-1
 	constexpr unsigned short CTSLOTS = 16384;         // no. of computed table slots
 	constexpr unsigned short CTMASK = CTSLOTS - 1;    // must be CTSLOTS-1
+    constexpr unsigned short NoiseSLOTS = 16384;         // no. of computed table slots
+    constexpr unsigned short NoiseMASK = CTSLOTS - 1;    // must be CTSLOTS-1
 	constexpr unsigned short TTSLOTS = 2048;          // Toffoli table slots
 	constexpr unsigned short TTMASK = TTSLOTS - 1;    // must be TTSLOTS-1
 	constexpr unsigned short CHUNK_SIZE = 2000;
@@ -75,6 +77,11 @@ namespace dd {
     // computed table definitions
     // compute table entry kinds
     enum CTkind {
+        I,
+        X,
+        Y,
+        Z,
+        A,
         ad,
         mult,
         fid,
@@ -115,6 +122,15 @@ namespace dd {
 	    Edge e;
     };
 
+    struct NoiseEntry // Toffoli table entry defn
+    {
+        Edge a;
+        NodePtr r;
+        ComplexValue rw;
+        unsigned short n, t;
+        short line[MAXN];
+    };
+
 	enum DynamicReorderingStrategy {
 		None, Sifting
 	};
@@ -141,6 +157,8 @@ namespace dd {
 	    std::array<TTentry, TTSLOTS> TTable{ };
 	    // Identity matrix table
 	    std::array<Edge, MAXN> IdTable{ };
+        // Noise operations table
+        std::array<NoiseEntry, NoiseSLOTS> NoiseTable{ };
 
 	    unsigned int currentNodeGCLimit;              // current garbage collection limit
 	    unsigned int currentComplexGCLimit;         // current complex garbage collection limit
@@ -185,6 +203,8 @@ namespace dd {
 	    }
 	    static unsigned short TThash(unsigned short n, unsigned short t, const short line[]);
 
+        static unsigned long NoiseHash(unsigned short n_qubits, unsigned short current_qubit, const Edge &a, const short *line);
+
 	    unsigned int nodeCount(const Edge& e, std::unordered_set<NodePtr>& v) const;
 	    ComplexValue getVectorElement(Edge e, unsigned long long int element);
 	    ListElementPtr newListElement();
@@ -220,6 +240,10 @@ namespace dd {
 	    Edge makeIdent(short x, short y);
 	    Edge makeGateDD(const Matrix2x2& mat, unsigned short n, const short *line);
 	    Edge makeGateDD(const std::array<ComplexValue,NEDGE>& mat, unsigned short n, const std::array<short,MAXN>& line);
+
+        Edge Noiselookup(unsigned short n_qubits, unsigned short current_qubit, const short *line, const Edge &a);
+        void NoiseInsert(unsigned short n_qubits, unsigned short current_qubit, const short *line, const Edge &manipulated_edge,
+                         const Edge &result);
 
         Edge CTlookup(const Edge& a, const Edge& b, CTkind which);
         void CTinsert(const Edge& a, const Edge& b, const Edge& r, CTkind which);
@@ -314,6 +338,10 @@ namespace dd {
 
 	    // debugging - not normally used
 	    void debugnode(NodePtr p) const;
-	};
+
+
+
+
+    };
 }
 #endif
