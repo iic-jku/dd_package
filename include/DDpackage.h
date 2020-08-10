@@ -167,8 +167,9 @@ namespace dd {
 	    unsigned long peaknodecount = 0;            // records peak node count in unique table
 
 	    std::array<unsigned long, 7> nOps{};                     // operation counters
-	    std::array<unsigned long, 7> CTlook{}, CThit{};      // counters for gathering compute table hit stats
+	    std::array<unsigned long, 7> CTlook{}, CThit{};   // counters for gathering compute table hit stats
         unsigned long UTcol=0, UTmatch=0, UTlookups=0;  // counter for collisions / matches in hash tables
+
 
 	    std::vector<ListElementPtr> allocated_list_chunks;
 	    std::vector<NodePtr> allocated_node_chunks;
@@ -220,7 +221,7 @@ namespace dd {
         std::array<unsigned short, MAXN> varOrder{ };    // variable order initially 0,1,... from bottom up | Usage: varOrder[level] := varible at a certain level
         std::array<unsigned short, MAXN> invVarOrder{ };// inverse of variable order (inverse permutation) | Usage: invVarOrder[variable] := level of a certain variable
 
-
+		unsigned long NoiseCThit = 0;
 
         Package();
         ~Package();

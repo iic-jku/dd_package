@@ -794,12 +794,12 @@ namespace dd {
      unsigned long Package::NoiseHash(const unsigned short n_qubits, const unsigned short current_qubit, const Edge& a, const short line[]) {
         unsigned long i = current_qubit;
         for (unsigned short j = 0; j <= current_qubit; j++){
-                i = (i << 2u) + (10 * j) + (line[j]);
+                i = (i << 2u) + (7 * j) + (line[j]);
 //                printf("%u", line[j]);
         }
 //        auto tmp = ((uintptr_t) a.p << 5u) + i + (uintptr_t) (a.w.r->val * 1000) + (uintptr_t) (a.w.i->val * 2000) & NoiseMASK;
 //        printf(" Pointer Hash: %lu Line Hash: %lu Hashed weights: %lu Hash value: %lu \n",((uintptr_t) a.p << 5u), i, (uintptr_t) (a.w.r->val * 1000) + (uintptr_t) (a.w.i->val * 2000), tmp);
-        return ((uintptr_t) a.p << 5u) + i + (uintptr_t) (a.w.r->val * 1000) + (uintptr_t) (a.w.i->val * 2000) & NoiseMASK;
+        return ((uintptr_t) a.p << 8u) + i + (uintptr_t) (a.w.r->val * 1000) + (uintptr_t) (a.w.i->val * 2000) & NoiseMASK;
     }
 
     Edge Package::Noiselookup(unsigned short n_qubits, unsigned short current_qubit, const short *line, const Edge &a) {
@@ -808,7 +808,10 @@ namespace dd {
         const unsigned long i = NoiseHash(n_qubits, current_qubit, a, line);
         if (NoiseTable[i].r == nullptr || NoiseTable[i].t != current_qubit) return r;
         if (!equals(NoiseTable[i].a, a) || !CN::equals(NoiseTable[i].a.w, a.w)) return r;
-        if (!std::memcmp(NoiseTable[i].line, line, n_qubits * sizeof(short))) return r;
+        if (std::memcmp(NoiseTable[i].line, line, n_qubits * sizeof(short)) != 0) return r;
+//        auto tmp = NoiseTable[i].line;
+//        auto tmp0 = line;
+//        auto tmp1 = std::memcmp(NoiseTable[i].line, line, n_qubits * sizeof(short));
 
         r.p = NoiseTable[i].r;
         if (std::fabs(NoiseTable[i].rw.r) < CN::TOLERANCE && std::fabs(NoiseTable[i].rw.i) < CN::TOLERANCE) {
@@ -816,6 +819,7 @@ namespace dd {
         } else {
             r.w = cn.getCachedComplex(NoiseTable[i].rw.r, NoiseTable[i].rw.i);
         }
+        NoiseCThit++;
         return r;
     }
 
