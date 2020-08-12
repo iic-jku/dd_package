@@ -808,10 +808,9 @@ namespace dd {
         const unsigned long i = NoiseHash(n_qubits, current_qubit, a, line);
         if (NoiseTable[i].r == nullptr || NoiseTable[i].t != current_qubit) return r;
         if (!equals(NoiseTable[i].a, a) || !CN::equals(NoiseTable[i].a.w, a.w)) return r;
-        if (std::memcmp(NoiseTable[i].line, line, n_qubits * sizeof(short)) != 0) return r;
-//        auto tmp = NoiseTable[i].line;
-//        auto tmp0 = line;
-//        auto tmp1 = std::memcmp(NoiseTable[i].line, line, n_qubits * sizeof(short));
+        //Only need to check qubits lower or equal to the current qubit
+        if (std::memcmp(NoiseTable[i].line, line, (current_qubit+1) * sizeof(short)) != 0) return r;
+  //      if (std::memcmp(NoiseTable[i].line, line, n_qubits * sizeof(short)) != 0) return r;
 
         r.p = NoiseTable[i].r;
         if (std::fabs(NoiseTable[i].rw.r) < CN::TOLERANCE && std::fabs(NoiseTable[i].rw.i) < CN::TOLERANCE) {
