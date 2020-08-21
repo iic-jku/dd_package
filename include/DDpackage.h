@@ -127,7 +127,8 @@ namespace dd {
         Edge a;
         NodePtr r;
         ComplexValue rw;
-        unsigned short n, t;
+//        short amp_damp_to;
+        unsigned short t;
         short line[MAXN];
     };
 
@@ -204,7 +205,7 @@ namespace dd {
 	    }
 	    static unsigned short TThash(unsigned short n, unsigned short t, const short line[]);
 
-        static unsigned long NoiseHash(unsigned short n_qubits, unsigned short current_qubit, const Edge &a, const short *line);
+        static unsigned long NoiseHash(const unsigned short current_qubit, const Edge &a, const short line[]);
 
 	    unsigned int nodeCount(const Edge& e, std::unordered_set<NodePtr>& v) const;
 	    ComplexValue getVectorElement(Edge e, unsigned long long int element);
@@ -242,9 +243,9 @@ namespace dd {
 	    Edge makeGateDD(const Matrix2x2& mat, unsigned short n, const short *line);
 	    Edge makeGateDD(const std::array<ComplexValue,NEDGE>& mat, unsigned short n, const std::array<short,MAXN>& line);
 
-        Edge Noiselookup(unsigned short n_qubits, unsigned short current_qubit, const short *line, const Edge &a);
-        void NoiseInsert(unsigned short n_qubits, unsigned short current_qubit, const short *line, const Edge &manipulated_edge,
-                         const Edge &result);
+        Edge Noiselookup(unsigned short current_qubit, const short *line, const Edge &a);
+        void
+        NoiseInsert(unsigned short current_qubit, const short *line, const Edge &manipulated_edge, const Edge &result);
 
         Edge CTlookup(const Edge& a, const Edge& b, CTkind which);
         void CTinsert(const Edge& a, const Edge& b, const Edge& r, CTkind which);

@@ -791,27 +791,25 @@ namespace dd {
         }
     }
 
-     unsigned long Package::NoiseHash(const unsigned short n_qubits, const unsigned short current_qubit, const Edge& a, const short line[]) {
+     unsigned long Package::NoiseHash(const unsigned short current_qubit, const Edge &a, const short line[]) {
         unsigned long i = current_qubit;
         for (unsigned short j = 0; j <= current_qubit; j++){
-                i = (i << 2u) + (7 * j) + (line[j]);
+                i = (i << 5u) + (4 * j) + (line[j] * 4);
 //                printf("%u", line[j]);
         }
 //        auto tmp = ((uintptr_t) a.p << 5u) + i + (uintptr_t) (a.w.r->val * 1000) + (uintptr_t) (a.w.i->val * 2000) & NoiseMASK;
 //        printf(" Pointer Hash: %lu Line Hash: %lu Hashed weights: %lu Hash value: %lu \n",((uintptr_t) a.p << 5u), i, (uintptr_t) (a.w.r->val * 1000) + (uintptr_t) (a.w.i->val * 2000), tmp);
-        return ((uintptr_t) a.p << 8u) + i + (uintptr_t) (a.w.r->val * 1000) + (uintptr_t) (a.w.i->val * 2000) & NoiseMASK;
+        return (((uintptr_t) a.p << 8u) + i + (uintptr_t) (a.w.r->val * 1000) + (uintptr_t) (a.w.i->val * 2000)) & NoiseMASK;
     }
 
-    Edge Package::Noiselookup(unsigned short n_qubits, unsigned short current_qubit, const short *line, const Edge &a) {
+    Edge Package::Noiselookup(unsigned short current_qubit, const short *line, const Edge &a) {
         Edge r{};
         r.p = nullptr;
-        const unsigned long i = NoiseHash(n_qubits, current_qubit, a, line);
+        const unsigned long i = NoiseHash(current_qubit, a, line);
         if (NoiseTable[i].r == nullptr || NoiseTable[i].t != current_qubit) return r;
         if (!equals(NoiseTable[i].a, a) || !CN::equals(NoiseTable[i].a.w, a.w)) return r;
         //Only need to check qubits lower or equal to the current qubit
         if (std::memcmp(NoiseTable[i].line, line, (current_qubit+1) * sizeof(short)) != 0) return r;
-  //      if (std::memcmp(NoiseTable[i].line, line, n_qubits * sizeof(short)) != 0) return r;
-
         r.p = NoiseTable[i].r;
         if (std::fabs(NoiseTable[i].rw.r) < CN::TOLERANCE && std::fabs(NoiseTable[i].rw.i) < CN::TOLERANCE) {
             return DDzero;
@@ -822,16 +820,15 @@ namespace dd {
         return r;
     }
 
-    void Package::NoiseInsert(unsigned short n_qubits, unsigned short current_qubit, const short *line, const Edge &manipulated_edge,
-                              const Edge &result) {
-        const unsigned long i = NoiseHash(n_qubits, current_qubit, manipulated_edge, line);
-        NoiseTable[i].n = n_qubits;
+    void Package::NoiseInsert(unsigned short current_qubit, const short *line, const Edge &manipulated_edge, const Edge &result) {
+        const unsigned long i = NoiseHash(current_qubit, manipulated_edge, line);
         NoiseTable[i].t = current_qubit;
-        std::memcpy(NoiseTable[i].line, line, n_qubits * sizeof(short));
+        std::memcpy(NoiseTable[i].line, line, (current_qubit+1) * sizeof(short));
         NoiseTable[i].a = manipulated_edge;
         NoiseTable[i].r = result.p;
         NoiseTable[i].rw.r = result.w.r->val;
         NoiseTable[i].rw.i = result.w.i->val;
+//        NoiseTable[i].amp_damp_to = ampDamping;
     }
 
     unsigned short Package::TThash(const unsigned short n, const unsigned short t, const short line[]) {
@@ -1265,6 +1262,9 @@ namespace dd {
 	        IdTable[y] = e;
         return e;
     }
+
+
+
 
     // build matrix representation for a single gate on a circuit with n lines
     // line is the vector of connections
