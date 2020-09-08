@@ -421,6 +421,9 @@ namespace dd {
 			            cn.releaseCached(i.w);
 		            }
 	            }
+            } else if (&e.p != &DDzero.p){//todo check if this is correct
+                e.p->next = nodeAvail;
+                nodeAvail = e.p;
             }
             return DDzero;
         }
@@ -484,6 +487,8 @@ namespace dd {
         key = key & HASHMASK;
 
         unsigned short v = e.p->v;
+//        printf("pointer to table %p ", &Unique);
+//        printf("Chain entries v: %d, key: %d, pointer 0: %p r: %f i: %f, pointer 1: %p r: %f i: %f, pointer 2: %p r: %f i: %f, pointer 3: %p r: %f i: %f ", v, key, (void *)e.p->e[0].p, e.p->e[0].w.r->val, e.p->e[0].w.i->val, (void *)e.p->e[1].p, e.p->e[1].w.r->val, e.p->e[1].w.i->val, (void *)e.p->e[2].p, e.p->e[2].w.r->val, e.p->e[2].w.i->val, (void *)e.p->e[3].p, e.p->e[3].w.r->val, e.p->e[3].w.i->val);
         NodePtr p = Unique[v][key]; // find pointer to appropriate collision chain
         while (p != nullptr)    // search for a match
         {
@@ -496,6 +501,7 @@ namespace dd {
                 UTmatch++;        // record hash table match
 
                 e.p = p;// and set it to point to node found (with weight unchanged)
+//                printf("returned (cached) node %p\n", (void *)e.p);
                 return e;
             }
 
@@ -510,7 +516,7 @@ namespace dd {
 	        peaknodecount = nodecount;
 
         checkSpecialMatrices(e.p);
-
+//        printf("returned (new) node %p\n", (void *)e.p);
         return e;                // and return
     }
 
@@ -555,6 +561,7 @@ namespace dd {
                         if (p == terminalNode){
                             std::cerr << "[ERROR] Tried to collect a terminal node\n";
                         }
+//                        printf("Collecting node %p\n", (void*)p);
                         count++;
                         NodePtr nextp = p->next;
                         if (lastp == nullptr)
@@ -574,6 +581,13 @@ namespace dd {
         }
 	    currentNodeGCLimit += GCLIMIT_INC;
 	    nodecount = counta;
+//        auto size = 0;
+//        auto r = nodeAvail;
+//        while(r!= nullptr){
+//            size += 1;
+//            r = r->next;
+//        }
+//	    printf("avail. node: %d freed nodes: %d, nodes in use: %d\n", size, count, counta);
 	    cn.garbageCollect(); // NOTE: this cleans all complex values with ref-count 0
 	    currentComplexGCLimit += ComplexNumbers::GCLIMIT_INC;
 	    initComputeTable(); // IMPORTANT sets compute table to empty after garbage collection
@@ -588,6 +602,7 @@ namespace dd {
             r = nodeAvail;
 	        nodeAvail = nodeAvail->next;
         } else {            // otherwise allocate 2000 new nodes
+//            printf("Allocating new space for edges!!!\n");
 	        r = new Node[CHUNK_SIZE];
             allocated_node_chunks.push_back(r);
             NodePtr r2 = r + 1;
@@ -600,6 +615,7 @@ namespace dd {
         r->next = nullptr;
         r->ref = 0;            // set reference count to 0
 	    r->ident = r->symm = false; // mark as not identity or symmetric
+//	    printf("Taking the node %p\n", (void*)r);
         return r;
     }
 
@@ -647,9 +663,10 @@ namespace dd {
 
         if (e.p->ref == 0) // ERROR CHECK
         {
-            std::cerr <<"[ERROR] In decref: " << e.p->ref << " before decref\n";
+//            std::cerr <<"[ERROR] In decref: " << e.p->ref << " before decref\n";
 	        debugnode(e.p);
-            std::exit(1);
+            throw std::length_error("[ERROR] In decref: 0 before decref");
+//            std::exit(1);
         }
         e.p->ref--;
 
@@ -820,7 +837,8 @@ namespace dd {
         return r;
     }
 
-    void Package::NoiseInsert(unsigned short current_qubit, const short *line, const Edge &manipulated_edge, const Edge &result) {
+    void Package::NoiseInsert(unsigned short current_qubit, const short *line, const Edge &manipulated_edge,
+                              const Edge &result) {
         const unsigned long i = NoiseHash(current_qubit, manipulated_edge, line);
         NoiseTable[i].t = current_qubit;
         std::memcpy(NoiseTable[i].line, line, (current_qubit+1) * sizeof(short));
@@ -869,12 +887,14 @@ namespace dd {
     // make a DD nonterminal node and return an edge pointing to it
     // node is not recreated if it already exists
     Edge Package::makeNonterminal(const short v, const Edge *edge, const bool cached) {
+
     	Edge e{ getNode(), CN::ONE};
         e.p->v = v;
 
         std::memcpy(e.p->e, edge, NEDGE * sizeof(Edge));
         e = normalize(e, cached); // normalize it
         e = UTlookup(e);  // look it up in the unique tables
+//        printf("Generated Node: %p\n", (void*) e.p);
         return e;          // return result
     }
 

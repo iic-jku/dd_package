@@ -340,10 +340,6 @@ namespace dd {
 
 	    // debugging - not normally used
 	    void debugnode(NodePtr p) const;
-
-
-
-
     };
 }
 #endif
