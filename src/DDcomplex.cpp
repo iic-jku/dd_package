@@ -112,21 +112,25 @@ namespace dd {
         int nentries = 0;
         std::cout << "CN statistics:\n";
 
-        int max = -1;
-        for (auto p : ComplexTable) {
-            int num = 0;
-            while (p != nullptr) {
-                num++;
-                nentries++;
-                p = p->next;
-            }
-            max = std::max(max, num);
-        }
-        std::cout << "\tComplex table has " << nentries << " entries\n";
-        std::cout << "\tLargest number of entries in bucket: " << max << "\n";
+	    int max = -1;
+	    for (auto p : ComplexTable) {
+		    int num = 0;
+		    while (p != nullptr) {
+			    num++;
+			    nentries++;
+			    p = p->next;
+		    }
+		    max = std::max(max, num);
+	    }
+	    std::cout << "\tComplex table has " << nentries << " entries\n";
+	    std::cout << "\tLargest number of entries in bucket: " << max << "\n";
+	    std::cout << "\tCT Lookups (total): " << ct_calls << "\n";
+	    std::cout << "\tCT Lookups (misses): " << ct_miss << "\n";
+
     }
 
-    ComplexTableEntry *ComplexNumbers::lookupVal(const fp &val) {
+	ComplexTableEntry *ComplexNumbers::lookupVal(const fp& val) {
+        ct_calls++;
         assert(!std::isnan(val));
 
         const auto key = getKey(val);
@@ -161,8 +165,9 @@ namespace dd {
             }
         }
 
-        auto r = getComplexTableEntry();
-        r->val = val;
+        ct_miss++;
+		auto r = getComplexTableEntry();
+		r->val = val;
         r->next = ComplexTable[key];
         ComplexTable[key] = r;
 

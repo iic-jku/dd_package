@@ -293,7 +293,7 @@ namespace dd {
     }
 
     // create DD for basis state |q_n-1 q_n-2 ... q1 q0>
-    Edge Package::makeBasisState(unsigned short n, const std::bitset<64>& state) {
+    Edge Package::makeBasisState(unsigned short n, const std::bitset<MAXN>& state) {
 	    Edge f = DDone;
 	    Edge edges[4];
 	    edges[1] = edges[3] = DDzero;
@@ -309,6 +309,57 @@ namespace dd {
 	    	f = makeNonterminal(p, edges);
 	    }
 	    return f;
+    }
+
+	Edge Package::makeBasisState(unsigned short n, const std::vector<BasisStates>& state) {
+		if (state.size() < n) {
+			std::cerr << "Insufficient qubit states provided. Requested " << n << ", but received " << state.size() << std::endl;
+			exit(1);
+		}
+
+    	Edge f = DDone;
+		Edge edges[4];
+		edges[1] = edges[3] = DDzero;
+
+		for (unsigned short p = 0; p < n; ++p) {
+			switch (state[p]) {
+				case BasisStates::zero:
+					edges[0] = f;
+					edges[2] = DDzero;
+					break;
+				case BasisStates::one:
+					edges[0] = DDzero;
+					edges[2] = f;
+					break;
+				case BasisStates::plus:
+					edges[0].p = f.p;
+					edges[0].w = cn.lookup(SQRT_2, 0);
+					edges[2].p = f.p;
+					edges[2].w = cn.lookup(SQRT_2, 0);
+					break;
+				case BasisStates::minus:
+					edges[0].p = f.p;
+					edges[0].w = cn.lookup(SQRT_2, 0);
+					edges[2].p = f.p;
+					edges[2].w = cn.lookup(-SQRT_2, 0);
+					break;
+				case BasisStates::right:
+					edges[0].p = f.p;
+					edges[0].w = cn.lookup(SQRT_2, 0);
+					edges[2].p = f.p;
+					edges[2].w = cn.lookup(0, SQRT_2);
+					break;
+				case BasisStates::left:
+					edges[0].p = f.p;
+					edges[0].w = cn.lookup(SQRT_2, 0);
+					edges[2].p = f.p;
+					edges[2].w = cn.lookup(0, -SQRT_2);
+					break;
+			}
+
+			f = makeNonterminal(static_cast<short>(p), edges);
+		}
+		return f;
     }
 
     Edge Package::normalize(Edge& e, bool cached) {
@@ -327,7 +378,7 @@ namespace dd {
 	    }
 
 	    /// --- Matrix treatment ---
-	    if (forceMatrixNormalization || !zero[1] || !zero[3]) {
+	    if (mode == Mode::Matrix || !zero[1] || !zero[3]) {
 	    	fp max = 0.L;
 	    	Complex maxc = ComplexNumbers::ONE;
 		    // determine max amplitude
@@ -525,12 +576,18 @@ namespace dd {
     // set identity table to empty
     void Package::initComputeTable() {
         for (unsigned int i = 0; i < CTSLOTS; i++) {
-            CTable1[i].r.p = nullptr;
-            CTable1[i].which = none;
-            CTable2[i].r = nullptr;
-            CTable2[i].which = none;
-            CTable3[i].r = nullptr;
-            CTable3[i].which = none;
+            for (auto & table : CTable1) {
+                table[i].r.p = nullptr;
+                table[i].which = none;
+            }
+            for (auto & table : CTable2) {
+                table[i].r = nullptr;
+                table[i].which = none;
+            }
+            for (auto & table : CTable3) {
+                table[i].r = nullptr;
+                table[i].which = none;
+            }
         }
         for (auto & i : TTable) {
             i.e.p = nullptr;
@@ -714,50 +771,53 @@ namespace dd {
         CTlook[which]++;
 
         if (which == mult || which == fid || which == kron) {
+            std::array<CTentry2, CTSLOTS>& table = CTable2.at(mode);
             const unsigned long i = CThash(a, b, which);
 
-            if (CTable2[i].which != which) return r;
-            if (!equals(CTable2[i].a, a)) return r;
-	        if (!equals(CTable2[i].b, b)) return r;
+            if (table[i].which != which) return r;
+            if (!equals(table[i].a, a)) return r;
+	        if (!equals(table[i].b, b)) return r;
 
             CThit[which]++;
-            r.p = CTable2[i].r;
+            r.p = table[i].r;
 
-            if (std::fabs(CTable2[i].rw.r) < CN::TOLERANCE && std::fabs(CTable2[i].rw.i) < CN::TOLERANCE) {
+            if (std::fabs(table[i].rw.r) < CN::TOLERANCE && std::fabs(table[i].rw.i) < CN::TOLERANCE) {
                 return DDzero;
             } else {
-                r.w = cn.getCachedComplex(CTable2[i].rw.r, CTable2[i].rw.i);
+                r.w = cn.getCachedComplex(table[i].rw.r, table[i].rw.i);
             }
 
             return r;
-        } else if (which == ad) {
+        } else if (which == ad || which == noise || which == noNoise) {
+            std::array<CTentry3, CTSLOTS>& table = CTable3.at(mode);
             ComplexValue aw{ a.w.r->val, a.w.i->val};
             ComplexValue bw{ b.w.r->val, b.w.i->val };
             const unsigned long i = CThash2(a.p, aw, b.p, bw, which);
 
-            if (CTable3[i].which != which) return r;
-            if (CTable3[i].a != a.p || !CN::equals(CTable3[i].aw, aw)) return r;
-            if (CTable3[i].b != b.p || !CN::equals(CTable3[i].bw, bw)) return r;
+            if (table[i].which != which) return r;
+            if (table[i].a != a.p || !CN::equals(table[i].aw, aw)) return r;
+            if (table[i].b != b.p || !CN::equals(table[i].bw, bw)) return r;
 
             CThit[which]++;
-            r.p = CTable3[i].r;
+            r.p = table[i].r;
 
-            if (std::fabs(CTable3[i].rw.r) < CN::TOLERANCE && std::fabs(CTable3[i].rw.i) < CN::TOLERANCE) {
+            if (std::fabs(table[i].rw.r) < CN::TOLERANCE && std::fabs(table[i].rw.i) < CN::TOLERANCE) {
                 return DDzero;
             } else {
-	            r.w = cn.getCachedComplex(CTable3[i].rw.r, CTable3[i].rw.i);
+	            r.w = cn.getCachedComplex(table[i].rw.r, table[i].rw.i);
             }
 
             return r;
         } else if (which == conjTransp || which == transp) {
+            std::array<CTentry1, CTSLOTS>& table = CTable1.at(mode);
             const unsigned long i = CThash(a, b, which);
 
-            if (CTable1[i].which != which) return r;
-	        if (!equals(CTable1[i].a, a)) return r;
-	        if (!equals(CTable1[i].b, b)) return r;
+            if (table[i].which != which) return r;
+	        if (!equals(table[i].a, a)) return r;
+	        if (!equals(table[i].b, b)) return r;
 
             CThit[which]++;
-            return CTable1[i].r;
+            return table[i].r;
         } else {
             std::cerr << "Undefined kind in CTlookup: " << which << "\n";
             std::exit(1);
@@ -771,37 +831,40 @@ namespace dd {
                 std::cerr << "[WARN] CTinsert: Edge with near zero weight a.w=" << a.w << "  b.w=" << b.w << "\n";
             }
             assert(((std::uintptr_t)r.w.r & 1u) == 0 && ((std::uintptr_t)r.w.i & 1u) == 0);
+            std::array<CTentry2, CTSLOTS>& table = CTable2.at(mode);
             const unsigned long i = CThash(a, b, which);
 
-            CTable2[i].a = a;
-            CTable2[i].b = b;
-            CTable2[i].which = which;
-            CTable2[i].r = r.p;
-            CTable2[i].rw.r = r.w.r->val;
-            CTable2[i].rw.i = r.w.i->val;
-        } else if (which == ad) {
+            table[i].a = a;
+            table[i].b = b;
+            table[i].which = which;
+            table[i].r = r.p;
+            table[i].rw.r = r.w.r->val;
+            table[i].rw.i = r.w.i->val;
+        } else if (which == ad || which == noise || which == noNoise) {
+            std::array<CTentry3, CTSLOTS>& table = CTable3.at(mode);
 	        ComplexValue aw{ a.w.r->val, a.w.i->val };
 	        ComplexValue bw{ b.w.r->val, b.w.i->val };
             const unsigned long i = CThash2(a.p, aw, b.p, bw, which);
 
             assert(((std::uintptr_t)r.w.r & 1u) == 0 && ((std::uintptr_t)r.w.i & 1u) == 0);
 
-            CTable3[i].a = a.p;
-            CTable3[i].aw = aw;
-            CTable3[i].b = b.p;
-            CTable3[i].bw = bw;
-            CTable3[i].r = r.p;
-            CTable3[i].rw.r = r.w.r->val;
-            CTable3[i].rw.i = r.w.i->val;
-            CTable3[i].which = which;
+            table[i].a = a.p;
+            table[i].aw = aw;
+            table[i].b = b.p;
+            table[i].bw = bw;
+            table[i].r = r.p;
+            table[i].rw.r = r.w.r->val;
+            table[i].rw.i = r.w.i->val;
+            table[i].which = which;
 
         } else if (which == conjTransp || which == transp) {
+            std::array<CTentry1, CTSLOTS>& table = CTable1.at(mode);
             const unsigned long i = CThash(a, b, which);
 
-            CTable1[i].a = a;
-            CTable1[i].b = b;
-            CTable1[i].which = which;
-            CTable1[i].r = r;
+            table[i].a = a;
+            table[i].b = b;
+            table[i].which = which;
+            table[i].r = r;
         } else {
             std::cerr << "Undefined kind in CTinsert: " << which << "\n";
             std::exit(1);
@@ -922,14 +985,14 @@ namespace dd {
     }
 
     Package::Package() : cn(ComplexNumbers()) {
+        mode = Mode::Vector;
 	    initComputeTable();  // init computed table to empty
         currentNodeGCLimit = GCLIMIT1; // set initial garbage collection limit
 	    currentComplexGCLimit = ComplexNumbers::GCLIMIT1;
 	    visited.max_load_factor(10);
 
-        for (unsigned short i = 0; i < MAXN; i++) //  set initial variable order to 0,1,2... from bottom up
-        {
-	        varOrder[i] = invVarOrder[i] = i;
+        for (unsigned short i = 0; i < MAXN; i++) { //  set initial variable order to 0,1,2... from bottom up
+            varOrder[i] = invVarOrder[i] = i;
         }
     }
 
@@ -1242,14 +1305,10 @@ namespace dd {
 
         Edge e[NEDGE];
 	    // conjugate transpose submatrices and rearrange as required
-        for (int i = 0; i < RADIX; i++) {
-            for (int j = i; j < RADIX; j++) {
-                e[i * RADIX + j] = conjugateTranspose(a.p->e[j * RADIX + i]);
-                if (i != j)
-                    e[j * RADIX + i] = conjugateTranspose(
-		                    a.p->e[i * RADIX + j]);
-            }
-        }
+	    e[0] = conjugateTranspose(a.p->e[0]);
+	    e[1] = conjugateTranspose(a.p->e[2]);
+	    e[2] = conjugateTranspose(a.p->e[1]);
+	    e[3] = conjugateTranspose(a.p->e[3]);
 	    r = makeNonterminal(a.p->v, e);    // create new top node
 
 	    Complex c = cn.getTempCachedComplex();
