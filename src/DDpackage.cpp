@@ -475,7 +475,7 @@ namespace dd {
 			            cn.releaseCached(i.w);
 		            }
 	            }
-            } else if (&e.p != &DDzero.p){//todo check if this is correct
+            } else if (&e.p != &DDzero.p){
                 e.p->next = nodeAvail;
                 nodeAvail = e.p;
             }
@@ -569,6 +569,7 @@ namespace dd {
         if (nodecount > peaknodecount)
 	        peaknodecount = nodecount;
 
+        e.p->visited = false;
         checkSpecialMatrices(e.p);
 //        printf("returned (new) node %p\n", (void *)e.p);
         return e;                // and return
@@ -591,6 +592,9 @@ namespace dd {
                 table[i].r = nullptr;
                 table[i].which = none;
             }
+        }
+        for (auto & i : OperationTable) {
+            i.r = nullptr;
         }
         for (auto & i : TTable) {
             i.e.p = nullptr;
@@ -770,29 +774,44 @@ namespace dd {
     unsigned long Package::NoiseHash(const unsigned short current_qubit, const Edge &a, const short line[]) {
         unsigned long i = current_qubit;
         for (unsigned short j = 0; j <= current_qubit; j++){
-            i = (i << 5u) + (4 * j) + (line[j] * 4);
+//            i = (i << 5u) + (4 * j) + (line[j] * 4);
+            i = (i << 3u) + i * j + line[j];
 //                printf("%u", line[j]);
         }
 //        auto tmp = ((uintptr_t) a.p << 5u) + i + (uintptr_t) (a.w.r->val * 1000) + (uintptr_t) (a.w.i->val * 2000) & NoiseMASK;
 //        printf(" Pointer Hash: %lu Line Hash: %lu Hashed weights: %lu Hash value: %lu \n",((uintptr_t) a.p << 5u), i, (uintptr_t) (a.w.r->val * 1000) + (uintptr_t) (a.w.i->val * 2000), tmp);
         return (((uintptr_t) a.p << 8u) + i + (uintptr_t) (a.w.r->val * 1000) + (uintptr_t) (a.w.i->val * 2000)) & NoiseMASK;
     }
+    void Package::NoiseInsert(const Edge &manipulated_edge, const Edge &result, unsigned short current_qubit, const short *line) {
+        if (current_qubit<1){
+            return;
+        }
+        const unsigned long i = NoiseHash(current_qubit, manipulated_edge, line);
+//        printf("Hash: %lu\n", i);
+        std::memcpy(NoiseTable[i].line, line, (current_qubit-1) * sizeof(short));
+        NoiseTable[i].a = manipulated_edge;
+        NoiseTable[i].r = result.p;
+        NoiseTable[i].rw.r = result.w.r->val;
+        NoiseTable[i].rw.i = result.w.i->val;
+    }
 
-    Edge Package::Noiselookup(unsigned short current_qubit, const short *line, const Edge &a) {
-        Edge r{};
+    Edge Package::Noiselookup(const Edge &manipulated_edge, unsigned short current_qubit, const short *line) {
+        noiseLook++;
+        Edge r{nullptr, {nullptr, nullptr}};
         r.p = nullptr;
-        const unsigned long i = NoiseHash(current_qubit, a, line);
-        if (NoiseTable[i].r == nullptr || NoiseTable[i].t != current_qubit) return r;
-        if (!equals(NoiseTable[i].a, a) || !CN::equals(NoiseTable[i].a.w, a.w)) return r;
+        const unsigned long i = NoiseHash(current_qubit, manipulated_edge, line);
+        if (NoiseTable[i].r == nullptr) return r;
+        if (!equals(NoiseTable[i].a, manipulated_edge)) return r;
         //Only need to check qubits lower or equal to the current qubit
-        if (std::memcmp(NoiseTable[i].line, line, (current_qubit+1) * sizeof(short)) != 0) return r;
+
+        if (std::memcmp(NoiseTable[i].line, line, (current_qubit-1) * sizeof(short)) != 0) return r;
         r.p = NoiseTable[i].r;
         if (std::fabs(NoiseTable[i].rw.r) < CN::TOLERANCE && std::fabs(NoiseTable[i].rw.i) < CN::TOLERANCE) {
             return DDzero;
         } else {
             r.w = cn.getCachedComplex(NoiseTable[i].rw.r, NoiseTable[i].rw.i);
         }
-        NoiseCThit++;
+        noiseCThit++;
         return r;
     }
 
@@ -866,6 +885,7 @@ namespace dd {
             std::array<CTentry2, CTSLOTS>& table = CTable2.at(mode);
             const unsigned long i = CThash(a, b, which);
 
+
             table[i].a = a;
             table[i].b = b;
             table[i].which = which;
@@ -901,18 +921,6 @@ namespace dd {
             std::cerr << "Undefined kind in CTinsert: " << which << "\n";
             std::exit(1);
         }
-    }
-
-    void Package::NoiseInsert(unsigned short current_qubit, const short *line, const Edge &manipulated_edge,
-                              const Edge &result) {
-        const unsigned long i = NoiseHash(current_qubit, manipulated_edge, line);
-        NoiseTable[i].t = current_qubit;
-        std::memcpy(NoiseTable[i].line, line, (current_qubit+1) * sizeof(short));
-        NoiseTable[i].a = manipulated_edge;
-        NoiseTable[i].r = result.p;
-        NoiseTable[i].rw.r = result.w.r->val;
-        NoiseTable[i].rw.i = result.w.i->val;
-//        NoiseTable[i].amp_damp_to = ampDamping;
     }
 
     unsigned short Package::TThash(const unsigned short n, const unsigned short t, const short line[]) {
@@ -1818,4 +1826,43 @@ namespace dd {
 			}
 		}
 	}
+
+    Edge Package::OperationLookup(const unsigned int operationType, const short *line, const unsigned short nQubits){
+        operationLook++;
+        Edge r{nullptr, {nullptr, nullptr}};
+        r.p = nullptr;
+        const unsigned long i = OperationHash(operationType, line, nQubits);
+        if (OperationTable[i].operationType != operationType) return r;
+        if (OperationTable[i].r == nullptr) return r;
+        if (OperationTable[i].r->v != nQubits-1 ) return r;
+
+        if (std::memcmp(OperationTable[i].line, line, (nQubits) * sizeof(short)) != 0) return r;
+
+        r.p = OperationTable[i].r;
+        if (std::fabs(OperationTable[i].rw.r) < CN::TOLERANCE && std::fabs(OperationTable[i].rw.i) < CN::TOLERANCE) {
+            return DDzero;
+        } else {
+            r.w = cn.lookup(OperationTable[i].rw.r, OperationTable[i].rw.i);
+        }
+        operationCThit++;
+        return r;
+    }
+
+    void Package::OperationInsert(const unsigned int operationType, const short *line, const Edge &result, const unsigned short nQubits) {
+        const unsigned long i = OperationHash(operationType, line, nQubits);
+        std::memcpy(OperationTable[i].line, line, (nQubits) * sizeof(short));
+        OperationTable[i].operationType = operationType;
+        OperationTable[i].r = result.p;
+        OperationTable[i].rw.r = result.w.r->val;
+        OperationTable[i].rw.i = result.w.i->val;
+    }
+
+    unsigned long Package::OperationHash(unsigned int operationType, const short *line, const unsigned short nQubits){
+        unsigned long i = operationType;
+        for (unsigned short j = 0; j <= nQubits; j++){
+//            i = (i << 5u) + (4 * j) + (line[j] * 4);
+            i = (i << 3u) + i * j + line[j];
+        }
+        return i & OperationMASK;
+    }
 }

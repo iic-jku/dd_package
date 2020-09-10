@@ -29,7 +29,7 @@ namespace dd {
 	constexpr unsigned short NEDGE = RADIX * RADIX;   // max no. of edges = RADIX^2
 
 	// General package configuration parameters
-	constexpr unsigned int GCLIMIT1 = 250000;                // first garbage collection limit
+	constexpr unsigned int GCLIMIT1 = 300000;                // first garbage collection limit
 	constexpr unsigned int GCLIMIT_INC = 0;                  // garbage collection limit increment
 	constexpr unsigned int MAXREFCNT = 4000000;     // max reference count (saturates at this value)
 	constexpr unsigned int NODECOUNT_BUCKETS = 200000;
@@ -39,6 +39,8 @@ namespace dd {
 	constexpr unsigned short CTMASK = CTSLOTS - 1;    // must be CTSLOTS-1
     constexpr unsigned short NoiseSLOTS = 16384;
     constexpr unsigned short NoiseMASK = NoiseSLOTS - 1;
+    constexpr unsigned short OperationSLOTS = 16384;
+    constexpr unsigned short OperationMASK = NoiseSLOTS - 1;
 	constexpr unsigned short TTSLOTS = 2048;          // Toffoli table slots
 	constexpr unsigned short TTMASK = TTSLOTS - 1;    // must be TTSLOTS-1
 	constexpr unsigned short CHUNK_SIZE = 2000;
@@ -56,7 +58,7 @@ namespace dd {
 	    Edge e[NEDGE];     // edges out of this node
 	    unsigned int ref;       // reference count
 	    short v;        // variable index (nonterminal) value (-1 for terminal)
-	    bool ident, symm; // special matrices flags
+	    bool ident, symm, visited; // special matrices flags
     };
 
     // list definitions for breadth first traversals (e.g. printing)
@@ -81,7 +83,8 @@ namespace dd {
         X,
         Y,
         Z,
-        A,
+        ATrue,
+        AFalse,
         ad,
         mult,
         fid,
@@ -122,13 +125,19 @@ namespace dd {
 	    Edge e;
     };
 
-    struct NoiseEntry // Toffoli table entry defn
+    struct NoiseEntry
     {
         Edge a;
         NodePtr r;
         ComplexValue rw;
-//        short amp_damp_to;
-        unsigned short t;
+        short line[MAXN];
+    };
+
+    struct OperationEntry
+    {
+        NodePtr r;
+        ComplexValue rw;
+        unsigned int operationType;
         short line[MAXN];
     };
 
@@ -172,6 +181,9 @@ namespace dd {
         // Noise operations table
         std::array<NoiseEntry, NoiseSLOTS> NoiseTable{ };
 
+        // Operation operations table
+        std::array<OperationEntry, OperationSLOTS> OperationTable{ };
+
 	    unsigned int currentNodeGCLimit;              // current garbage collection limit
 	    unsigned int currentComplexGCLimit;         // current complex garbage collection limit
 	    std::array<int, MAXN> active{ };              // number of active nodes for each variable
@@ -179,7 +191,7 @@ namespace dd {
 	    unsigned long peaknodecount = 0;            // records peak node count in unique table
 
 	    std::array<unsigned long, 7> nOps{};                     // operation counters
-	    std::array<unsigned long, 7> CTlook{}, CThit{};      // counters for gathering compute table hit stats
+//	    std::array<unsigned long, 7> CTlook{}, CThit{};      // counters for gathering compute table hit stats
         unsigned long UTcol=0, UTmatch=0, UTlookups=0;  // counter for collisions / matches in hash tables
 
 	    std::vector<ListElementPtr> allocated_list_chunks;
@@ -216,6 +228,7 @@ namespace dd {
 	    static unsigned short TThash(unsigned short n, unsigned short t, const short line[]);
 
         static unsigned long NoiseHash(const unsigned short current_qubit, const Edge &a, const short line[]);
+        static unsigned long OperationHash(const unsigned int operationType, const short *line, const unsigned short nQubits);
 
 	    unsigned int nodeCount(const Edge& e, std::unordered_set<NodePtr>& v) const;
 	    ComplexValue getVectorElement(Edge e, unsigned long long int element);
@@ -232,7 +245,11 @@ namespace dd {
         std::array<unsigned short, MAXN> varOrder{ };    // variable order initially 0,1,... from bottom up | Usage: varOrder[level] := varible at a certain level
         std::array<unsigned short, MAXN> invVarOrder{ };// inverse of variable order (inverse permutation) | Usage: invVarOrder[variable] := level of a certain variable
 
-        unsigned long NoiseCThit = 0;
+        unsigned long noiseCThit = 0;
+        unsigned long noiseLook = 0;
+        unsigned long operationCThit = 0;
+        unsigned long operationLook = 0;
+        std::array<unsigned long, 7> CTlook{}, CThit{};
 
         Package();
         ~Package();
@@ -254,8 +271,12 @@ namespace dd {
 	    Edge makeGateDD(const Matrix2x2& mat, unsigned short n, const short *line);
 	    Edge makeGateDD(const std::array<ComplexValue,NEDGE>& mat, unsigned short n, const std::array<short,MAXN>& line);
 
-        Edge Noiselookup(unsigned short current_qubit, const short *line, const Edge &a);
-        void NoiseInsert(unsigned short current_qubit, const short *line, const Edge &manipulated_edge, const Edge &result);
+        Edge Noiselookup(const Edge &manipulated_edge, unsigned short current_qubit, const short *line);
+        void NoiseInsert(const Edge &manipulated_edge, const Edge &result, unsigned short current_qubit, const short *line);
+
+        Edge OperationLookup(const unsigned int operationType, const short *line, const unsigned short nQubits);
+        void OperationInsert(const unsigned int operationType, const short *line, const Edge &result, const unsigned short nQubits);
+
 
 
         Edge CTlookup(const Edge& a, const Edge& b, CTkind which);
