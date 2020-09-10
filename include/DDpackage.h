@@ -37,8 +37,8 @@ namespace dd {
 	constexpr unsigned short HASHMASK = NBUCKET - 1;  // must be nbuckets-1
 	constexpr unsigned short CTSLOTS = 16384;         // no. of computed table slots
 	constexpr unsigned short CTMASK = CTSLOTS - 1;    // must be CTSLOTS-1
-    constexpr unsigned short NoiseSLOTS = 16384;         // no. of computed table slots
-    constexpr unsigned short NoiseMASK = CTSLOTS - 1;    // must be CTSLOTS-1
+    constexpr unsigned short NoiseSLOTS = 16384;
+    constexpr unsigned short NoiseMASK = NoiseSLOTS - 1;
 	constexpr unsigned short TTSLOTS = 2048;          // Toffoli table slots
 	constexpr unsigned short TTMASK = TTSLOTS - 1;    // must be TTSLOTS-1
 	constexpr unsigned short CHUNK_SIZE = 2000;
@@ -179,9 +179,8 @@ namespace dd {
 	    unsigned long peaknodecount = 0;            // records peak node count in unique table
 
 	    std::array<unsigned long, 7> nOps{};                     // operation counters
-	    std::array<unsigned long, 7> CTlook{}, CThit{};   // counters for gathering compute table hit stats
+	    std::array<unsigned long, 7> CTlook{}, CThit{};      // counters for gathering compute table hit stats
         unsigned long UTcol=0, UTmatch=0, UTlookups=0;  // counter for collisions / matches in hash tables
-
 
 	    std::vector<ListElementPtr> allocated_list_chunks;
 	    std::vector<NodePtr> allocated_node_chunks;
@@ -233,7 +232,7 @@ namespace dd {
         std::array<unsigned short, MAXN> varOrder{ };    // variable order initially 0,1,... from bottom up | Usage: varOrder[level] := varible at a certain level
         std::array<unsigned short, MAXN> invVarOrder{ };// inverse of variable order (inverse permutation) | Usage: invVarOrder[variable] := level of a certain variable
 
-		unsigned long NoiseCThit = 0;
+        unsigned long NoiseCThit = 0;
 
         Package();
         ~Package();
@@ -256,8 +255,8 @@ namespace dd {
 	    Edge makeGateDD(const std::array<ComplexValue,NEDGE>& mat, unsigned short n, const std::array<short,MAXN>& line);
 
         Edge Noiselookup(unsigned short current_qubit, const short *line, const Edge &a);
-        void
-        NoiseInsert(unsigned short current_qubit, const short *line, const Edge &manipulated_edge, const Edge &result);
+        void NoiseInsert(unsigned short current_qubit, const short *line, const Edge &manipulated_edge, const Edge &result);
+
 
         Edge CTlookup(const Edge& a, const Edge& b, CTkind which);
         void CTinsert(const Edge& a, const Edge& b, const Edge& r, CTkind which);
@@ -356,6 +355,6 @@ namespace dd {
 
 	    // debugging - not normally used
 	    void debugnode(NodePtr p) const;
-    };
+	};
 }
 #endif

@@ -446,19 +446,19 @@ namespace dd {
 
     }
 
-    void ComplexNumbers::decRef(const Complex &c) {
-        auto *ptr_r = ((ComplexTableEntry *) ((uintptr_t) c.r & (~1ull)));
-        auto *ptr_i = ((ComplexTableEntry *) ((uintptr_t) c.i & (~1ull)));
-        if (ptr_r != &oneEntry && ptr_r != &zeroEntry) {
-            assert(ptr_r->ref > 0);
-            ptr_r->ref--;
+	void ComplexNumbers::decRef(const Complex& c) {
+        if (c != ZERO && c != ONE) {
+            auto *ptr_r = ((ComplexTableEntry *) ((uintptr_t) c.r & (~1ull)));
+            auto *ptr_i = ((ComplexTableEntry *) ((uintptr_t) c.i & (~1ull)));
+            if (ptr_r != &oneEntry && ptr_r != &zeroEntry) {
+                assert(ptr_r->ref > 0);
+                ptr_r->ref--;
+            }
+            if (ptr_i != &oneEntry && ptr_i != &zeroEntry) {
+                assert(ptr_i->ref > 0);
+                ptr_i->ref--;
+            }
         }
-        if (ptr_i != &oneEntry && ptr_i != &zeroEntry) {
-            assert(ptr_i->ref > 0);
-            ptr_i->ref--;
-        }
-
-
     }
 
     void ComplexNumbers::printFormattedReal(std::ostream &os, fp r, bool imaginary) {

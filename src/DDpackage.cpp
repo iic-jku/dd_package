@@ -406,6 +406,9 @@ namespace dd {
                             cn.releaseCached(i.w);
                         }
                     }
+                } else if (&e.p != &DDzero.p){//todo check if this is correct
+                    e.p->next = nodeAvail;
+                    nodeAvail = e.p;
                 }
                 return DDzero;
             }
@@ -764,7 +767,36 @@ namespace dd {
         return nodeCount(e, visited);
     }
 
-	Edge Package::CTlookup(const Edge& a, const Edge& b, const CTkind which) {
+    unsigned long Package::NoiseHash(const unsigned short current_qubit, const Edge &a, const short line[]) {
+        unsigned long i = current_qubit;
+        for (unsigned short j = 0; j <= current_qubit; j++){
+            i = (i << 5u) + (4 * j) + (line[j] * 4);
+//                printf("%u", line[j]);
+        }
+//        auto tmp = ((uintptr_t) a.p << 5u) + i + (uintptr_t) (a.w.r->val * 1000) + (uintptr_t) (a.w.i->val * 2000) & NoiseMASK;
+//        printf(" Pointer Hash: %lu Line Hash: %lu Hashed weights: %lu Hash value: %lu \n",((uintptr_t) a.p << 5u), i, (uintptr_t) (a.w.r->val * 1000) + (uintptr_t) (a.w.i->val * 2000), tmp);
+        return (((uintptr_t) a.p << 8u) + i + (uintptr_t) (a.w.r->val * 1000) + (uintptr_t) (a.w.i->val * 2000)) & NoiseMASK;
+    }
+
+    Edge Package::Noiselookup(unsigned short current_qubit, const short *line, const Edge &a) {
+        Edge r{};
+        r.p = nullptr;
+        const unsigned long i = NoiseHash(current_qubit, a, line);
+        if (NoiseTable[i].r == nullptr || NoiseTable[i].t != current_qubit) return r;
+        if (!equals(NoiseTable[i].a, a) || !CN::equals(NoiseTable[i].a.w, a.w)) return r;
+        //Only need to check qubits lower or equal to the current qubit
+        if (std::memcmp(NoiseTable[i].line, line, (current_qubit+1) * sizeof(short)) != 0) return r;
+        r.p = NoiseTable[i].r;
+        if (std::fabs(NoiseTable[i].rw.r) < CN::TOLERANCE && std::fabs(NoiseTable[i].rw.i) < CN::TOLERANCE) {
+            return DDzero;
+        } else {
+            r.w = cn.getCachedComplex(NoiseTable[i].rw.r, NoiseTable[i].rw.i);
+        }
+        NoiseCThit++;
+        return r;
+    }
+
+    Edge Package::CTlookup(const Edge& a, const Edge& b, const CTkind which) {
     // Lookup a computation in the compute table
     // return NULL if not a match else returns result of prior computation
         Edge r{nullptr, {nullptr, nullptr}};
@@ -869,35 +901,6 @@ namespace dd {
             std::cerr << "Undefined kind in CTinsert: " << which << "\n";
             std::exit(1);
         }
-    }
-
-     unsigned long Package::NoiseHash(const unsigned short current_qubit, const Edge &a, const short line[]) {
-        unsigned long i = current_qubit;
-        for (unsigned short j = 0; j <= current_qubit; j++){
-                i = (i << 5u) + (4 * j) + (line[j] * 4);
-//                printf("%u", line[j]);
-        }
-//        auto tmp = ((uintptr_t) a.p << 5u) + i + (uintptr_t) (a.w.r->val * 1000) + (uintptr_t) (a.w.i->val * 2000) & NoiseMASK;
-//        printf(" Pointer Hash: %lu Line Hash: %lu Hashed weights: %lu Hash value: %lu \n",((uintptr_t) a.p << 5u), i, (uintptr_t) (a.w.r->val * 1000) + (uintptr_t) (a.w.i->val * 2000), tmp);
-        return (((uintptr_t) a.p << 8u) + i + (uintptr_t) (a.w.r->val * 1000) + (uintptr_t) (a.w.i->val * 2000)) & NoiseMASK;
-    }
-
-    Edge Package::Noiselookup(unsigned short current_qubit, const short *line, const Edge &a) {
-        Edge r{};
-        r.p = nullptr;
-        const unsigned long i = NoiseHash(current_qubit, a, line);
-        if (NoiseTable[i].r == nullptr || NoiseTable[i].t != current_qubit) return r;
-        if (!equals(NoiseTable[i].a, a) || !CN::equals(NoiseTable[i].a.w, a.w)) return r;
-        //Only need to check qubits lower or equal to the current qubit
-        if (std::memcmp(NoiseTable[i].line, line, (current_qubit+1) * sizeof(short)) != 0) return r;
-        r.p = NoiseTable[i].r;
-        if (std::fabs(NoiseTable[i].rw.r) < CN::TOLERANCE && std::fabs(NoiseTable[i].rw.i) < CN::TOLERANCE) {
-            return DDzero;
-        } else {
-            r.w = cn.getCachedComplex(NoiseTable[i].rw.r, NoiseTable[i].rw.i);
-        }
-        NoiseCThit++;
-        return r;
     }
 
     void Package::NoiseInsert(unsigned short current_qubit, const short *line, const Edge &manipulated_edge,
