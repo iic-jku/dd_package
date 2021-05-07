@@ -44,6 +44,8 @@ namespace dd {
 	constexpr unsigned short CTMASK = CTSLOTS - 1;    // must be CTSLOTS-1
     constexpr unsigned short OperationSLOTS = 16384;
     constexpr unsigned short OperationMASK = OperationSLOTS - 1;
+    constexpr unsigned short NoiseSLOTS = 16384;
+    constexpr unsigned short NoiseMASK = NoiseSLOTS - 1;
 	constexpr unsigned short TTSLOTS = 2048;          // Toffoli table slots
 	constexpr unsigned short TTMASK = TTSLOTS - 1;    // must be TTSLOTS-1
 	constexpr unsigned int NODE_CHUNK_SIZE = 2000;    // this parameter may be increased for larger benchmarks to minimize the number of allocations
@@ -77,6 +79,8 @@ namespace dd {
     // computed table definitions
     // compute table entry kinds
     enum CTkind {
+        noise,
+        noNoise,
         I,
         X,
         Y,
@@ -91,7 +95,6 @@ namespace dd {
         kron,
         none,
         ct_count //ct_count must be the final element
-
     };
 
     //computed table entry
@@ -121,6 +124,14 @@ namespace dd {
 	    unsigned short n, m, t;
 	    short line[MAXN];
 	    Edge e;
+    };
+
+    struct NoiseEntry
+    {
+        NodePtr a, r;     // a is the argument, r is the result
+        ComplexValue aw, rw;
+        CTkind which;       // type of operation
+        short line[MAXN];
     };
 
     struct OperationEntry
@@ -170,6 +181,9 @@ namespace dd {
         // Operation operations table
         std::array<OperationEntry, OperationSLOTS> OperationTable{ };
 
+        // Operation operations table
+        std::array<NoiseEntry, NoiseSLOTS> NoiseTable{ };
+
 	    unsigned int currentNodeGCLimit = GCLIMIT1;        // current garbage collection limit
 	    unsigned int currentComplexGCLimit = CN::GCLIMIT1; // current complex garbage collection limit
 		std::array<unsigned int, MAXN> active{ };          // number of active nodes for each variable
@@ -177,7 +191,7 @@ namespace dd {
 	    unsigned long peaknodecount = 0;                   // records peak node count in unique table
 
         std::array<unsigned long, ct_count> nOps{};              // operation counters
-	    std::array<unsigned long, ct_count> CTlook{}, CThit{};   // counters for gathering compute table hit stats
+
 
 	    std::vector<ListElementPtr> allocated_list_chunks;
 	    std::vector<NodePtr> allocated_node_chunks;
@@ -208,6 +222,8 @@ namespace dd {
 	    ListElementPtr newListElement();
 
     public:
+        std::array<unsigned long, ct_count> CTlook{}, CThit{};   // counters for gathering compute table hit stats
+
         // edges pointing to zero and one DD constants
         constexpr static Edge DDone{ terminalNode, ComplexNumbers::ONE };
         constexpr static Edge DDzero{ terminalNode, ComplexNumbers::ZERO };
@@ -258,6 +274,10 @@ namespace dd {
 
         Edge CTlookup(const Edge& a, const Edge& b, CTkind which);
         void CTinsert(const Edge& a, const Edge& b, const Edge& r, CTkind which);
+
+        Edge noiseLookup(const Edge &a, const short *line, unsigned short nQubits);
+        void noiseInsert(const Edge &a, const short *line, const Edge &r, unsigned short nQubits);
+        static inline unsigned long noiseHash(NodePtr a, const ComplexValue &aw, const short *line, unsigned short nQubits);
 
         long operationCThit = 0;
         long operationLook = 0;
