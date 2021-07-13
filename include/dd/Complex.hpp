@@ -6,42 +6,44 @@
 #ifndef DD_PACKAGE_COMPLEX_HPP
 #define DD_PACKAGE_COMPLEX_HPP
 
-#include "ComplexTable.hpp"
 #include "ComplexValue.hpp"
+#include "dd/tables/MagnitudeTable.hpp"
+#include "dd/tables/PhaseTable.hpp"
 
 #include <cstddef>
 #include <iostream>
 #include <utility>
 
 namespace dd {
-    using CTEntry = ComplexTable<>::Entry;
+    using MagEntry   = MagnitudeTable<>::Entry;
+    using PhaseEntry = PhaseTable<>::Entry;
 
     struct Complex {
-        CTEntry* r;
-        CTEntry* i;
+        MagEntry*   mag;
+        PhaseEntry* phase;
 
         static Complex zero;
         static Complex one;
 
         void setVal(const Complex& c) const {
-            r->value = CTEntry::val(c.r);
-            i->value = CTEntry::val(c.i);
+            mag->value   = MagEntry::val(c.mag);
+            phase->value = PhaseEntry::val(c.phase);
         }
 
         [[nodiscard]] inline bool approximatelyEquals(const Complex& c) const {
-            return CTEntry::approximatelyEquals(r, c.r) && CTEntry::approximatelyEquals(i, c.i);
+            return MagEntry::approximatelyEquals(mag, c.mag) && PhaseEntry::approximatelyEquals(phase, c.phase);
         };
 
         [[nodiscard]] inline bool approximatelyZero() const {
-            return CTEntry::approximatelyZero(r) && CTEntry::approximatelyZero(i);
+            return MagEntry::approximatelyZero(mag);
         }
 
         [[nodiscard]] inline bool approximatelyOne() const {
-            return CTEntry::approximatelyOne(r) && CTEntry::approximatelyZero(i);
+            return MagEntry::approximatelyOne(mag) && PhaseEntry::approximatelyZero(phase);
         }
 
         inline bool operator==(const Complex& other) const {
-            return r == other.r && i == other.i;
+            return mag == other.mag && phase == other.phase;
         }
 
         inline bool operator!=(const Complex& other) const {
@@ -49,47 +51,30 @@ namespace dd {
         }
 
         [[nodiscard]] std::string toString(bool formatted = true, int precision = -1) const {
-            return ComplexValue::toString(CTEntry::val(r), CTEntry::val(i), formatted, precision);
+            return ComplexValue::toString(MagEntry::val(mag), std::remainder(PhaseEntry::val(phase), 2.0), formatted, precision);
         }
 
         void writeBinary(std::ostream& os) const {
-            CTEntry::writeBinary(r, os);
-            CTEntry::writeBinary(i, os);
+            MagEntry::writeBinary(mag, os);
+            PhaseEntry::writeBinary(phase, os);
         }
     };
 
     inline std::ostream& operator<<(std::ostream& os, const Complex& c) {
-        auto r = CTEntry::val(c.r);
-        auto i = CTEntry::val(c.i);
-
-        if (r != 0) {
-            ComplexValue::printFormatted(os, r);
-        }
-        if (i != 0) {
-            if (r == i) {
-                os << "(1+i)";
-                return os;
-            } else if (i == -r) {
-                os << "(1-i)";
-                return os;
-            }
-            ComplexValue::printFormatted(os, i, true);
-        }
-        if (r == 0 && i == 0) os << 0;
-
+        os << c.toString();
         return os;
     }
 
-    inline Complex Complex::zero{&ComplexTable<>::zero, &ComplexTable<>::zero};
-    inline Complex Complex::one{&ComplexTable<>::one, &ComplexTable<>::zero};
+    inline Complex Complex::zero{&MagnitudeTable<>::zero, &PhaseTable<>::zero};
+    inline Complex Complex::one{&MagnitudeTable<>::one, &PhaseTable<>::zero};
 } // namespace dd
 
 namespace std {
     template<>
     struct hash<dd::Complex> {
         std::size_t operator()(dd::Complex const& c) const noexcept {
-            auto h1 = dd::murmur64(reinterpret_cast<std::size_t>(c.r));
-            auto h2 = dd::murmur64(reinterpret_cast<std::size_t>(c.i));
+            auto h1 = dd::murmur64(reinterpret_cast<std::size_t>(c.mag));
+            auto h2 = dd::murmur64(reinterpret_cast<std::size_t>(c.phase));
             return dd::combineHash(h1, h2);
         }
     };

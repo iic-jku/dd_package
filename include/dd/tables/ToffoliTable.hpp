@@ -6,8 +6,8 @@
 #ifndef DDpackage_TOFFOLITABLE_HPP
 #define DDpackage_TOFFOLITABLE_HPP
 
-#include "Control.hpp"
-#include "Definitions.hpp"
+#include "dd/Control.hpp"
+#include "dd/Definitions.hpp"
 
 #include <cstddef>
 #include <iostream>

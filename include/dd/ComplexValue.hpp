@@ -6,8 +6,9 @@
 #ifndef DD_PACKAGE_COMPLEXVALUE_HPP
 #define DD_PACKAGE_COMPLEXVALUE_HPP
 
-#include "ComplexTable.hpp"
 #include "Definitions.hpp"
+#include "dd/tables/MagnitudeTable.hpp"
+#include "dd/tables/PhaseTable.hpp"
 
 #include <algorithm>
 #include <cmath>
@@ -21,25 +22,24 @@
 
 namespace dd {
     struct ComplexValue {
-        fp r, i;
+        fp mag, phase;
 
         [[nodiscard]] inline bool approximatelyEquals(const ComplexValue& c) const {
-            return std::abs(r - c.r) < ComplexTable<>::tolerance() &&
-                   std::abs(i - c.i) < ComplexTable<>::tolerance();
+            return std::abs(mag - c.mag) < MagnitudeTable<>::tolerance() &&
+                   std::abs(phase - c.phase) < PhaseTable<>::tolerance();
         }
 
         [[nodiscard]] inline bool approximatelyZero() const {
-            return std::abs(r) < ComplexTable<>::tolerance() &&
-                   std::abs(i) < ComplexTable<>::tolerance();
+            return std::abs(mag) < MagnitudeTable<>::tolerance();
         }
 
         [[nodiscard]] inline bool approximatelyOne() const {
-            return std::abs(r - 1.) < ComplexTable<>::tolerance() &&
-                   std::abs(i) < ComplexTable<>::tolerance();
+            return std::abs(mag - 1.) < MagnitudeTable<>::tolerance() &&
+                   std::abs(phase) < PhaseTable<>::tolerance();
         }
 
         inline bool operator==(const ComplexValue& other) const {
-            return r == other.r && i == other.i;
+            return mag == other.mag && phase == other.phase;
         }
 
         inline bool operator!=(const ComplexValue& other) const {
@@ -47,159 +47,225 @@ namespace dd {
         }
 
         void readBinary(std::istream& is) {
-            is.read(reinterpret_cast<char*>(&r), sizeof(decltype(r)));
-            is.read(reinterpret_cast<char*>(&i), sizeof(decltype(i)));
+            is.read(reinterpret_cast<char*>(&mag), sizeof(decltype(mag)));
+            is.read(reinterpret_cast<char*>(&phase), sizeof(decltype(phase)));
         }
 
         void writeBinary(std::ostream& os) const {
-            os.write(reinterpret_cast<const char*>(&r), sizeof(decltype(r)));
-            os.write(reinterpret_cast<const char*>(&i), sizeof(decltype(i)));
+            os.write(reinterpret_cast<const char*>(&mag), sizeof(decltype(mag)));
+            os.write(reinterpret_cast<const char*>(&phase), sizeof(decltype(phase)));
         }
 
-        void from_string(const std::string& real_str, std::string imag_str) {
-            fp real = real_str.empty() ? 0. : std::stod(real_str);
-
-            imag_str.erase(remove(imag_str.begin(), imag_str.end(), ' '), imag_str.end());
-            imag_str.erase(remove(imag_str.begin(), imag_str.end(), 'i'), imag_str.end());
-            if (imag_str == "+" || imag_str == "-") imag_str = imag_str + "1";
-            fp imag = imag_str.empty() ? 0. : std::stod(imag_str);
-            r       = {real};
-            i       = {imag};
+        void from_string(const std::string& mag_str, const std::string& phase_str) {
+            mag   = mag_str.empty() ? 0. : std::stod(mag_str);
+            phase = phase_str.empty() ? 0. : std::stod(phase_str);
         }
 
-        static void printFormatted(std::ostream& os, fp r, bool imaginary = false) {
-            if (r == 0.L) {
-                os << (std::signbit(r) ? "-" : "+") << "0" << (imaginary ? "i" : "");
+        static auto getLowestFraction(const double x, const std::uint64_t maxDenominator = std::uint64_t(1) << 10, const fp tol = dd::MagnitudeTable<>::tolerance()) {
+            assert(x >= 0.);
+
+            std::pair<std::uint64_t, std::uint64_t> lowerBound{0U, 1U};
+            std::pair<std::uint64_t, std::uint64_t> upperBound{1U, 0U};
+
+            while ((lowerBound.second <= maxDenominator) && (upperBound.second <= maxDenominator)) {
+                auto num    = lowerBound.first + upperBound.first;
+                auto den    = lowerBound.second + upperBound.second;
+                auto median = static_cast<fp>(num) / static_cast<fp>(den);
+                if (std::abs(x - median) < tol) {
+                    if (den <= maxDenominator) {
+                        return std::pair{num, den};
+                    } else if (upperBound.second > lowerBound.second) {
+                        return upperBound;
+                    } else {
+                        return lowerBound;
+                    }
+                } else if (x > median) {
+                    lowerBound = {num, den};
+                } else {
+                    upperBound = {num, den};
+                }
+            }
+            if (lowerBound.second > maxDenominator) {
+                return upperBound;
+            } else {
+                return lowerBound;
+            }
+        }
+
+        static void printFormatted(std::ostream& os, fp r, bool phase = false) {
+            const auto tol = dd::MagnitudeTable<>::tolerance();
+            if (std::abs(r) < tol) {
                 return;
             }
-            auto n = std::log2(std::abs(r));
-            auto m = std::log2(std::abs(r) / SQRT2_2);
-            auto o = std::log2(std::abs(r) / PI);
+            if (phase) {
+                // special case treatment for +-i
+                if (std::abs(r - 0.5) < tol) {
+                    os << "i";
+                    return;
+                } else if (std::abs(r + 0.5) < tol) {
+                    os << "-i";
+                    return;
+                }
 
-            if (n == 0) { // +-1
-                if (imaginary) {
-                    os << (std::signbit(r) ? "-" : "+") << "i";
-                } else
+                os << "ℯ(";
+                if (std::signbit(r))
+                    os << "-";
+                os << "iπ";
+            }
+
+            auto absr = std::abs(r);
+
+            if (std::abs(absr - 1.) < tol) { // +-1
+                if (phase) {
+                    os << ")";
+                } else {
                     os << (std::signbit(r) ? "-" : "") << 1;
-                return;
-            }
-
-            if (m == 0) { // +- 1/sqrt(2)
-                if (imaginary) {
-                    os << (std::signbit(r) ? "-" : "+") << u8"\u221a\u00bdi";
-                } else {
-                    os << (std::signbit(r) ? "-" : "") << u8"\u221a\u00bd";
                 }
                 return;
             }
 
-            if (o == 0) { // +- pi
-                if (imaginary) {
-                    os << (std::signbit(r) ? "-" : "+") << u8"\u03c0i";
+            auto fraction = getLowestFraction(absr);
+            auto approx   = static_cast<fp>(fraction.first) / static_cast<fp>(fraction.second);
+            auto error    = std::abs(absr - approx);
+
+            if (error < tol) { // suitable fraction a/b found
+                if (phase) {
+                    if (fraction.second == 1U) {
+                        os << " " << fraction.first << ")";
+                    } else if (fraction.first == 1U) {
+                        os << "/" << fraction.second << ")";
+                    } else {
+                        os << " " << fraction.first << "/" << fraction.second << ")";
+                    }
                 } else {
-                    os << (std::signbit(r) ? "-" : "") << u8"\u03c0";
+                    if (fraction.second == 1U) {
+                        os << fraction.first;
+                    } else {
+                        os << fraction.first << "/" << fraction.second;
+                    }
                 }
                 return;
             }
 
-            if (std::abs(n + 1) < ComplexTable<>::tolerance()) { // 1/2
-                if (imaginary) {
-                    os << (std::signbit(r) ? "-" : "+") << u8"\u00bdi";
-                } else
-                    os << (std::signbit(r) ? "-" : "") << u8"\u00bd";
+            auto abssqrt = absr / SQRT2_2;
+
+            if (std::abs(abssqrt - 1.) < tol) { // +- 1/sqrt(2)
+                if (phase) {
+                    os << "/√2)";
+                } else {
+                    os << (std::signbit(r) ? "-" : "") << "1/√2";
+                }
                 return;
             }
 
-            if (std::abs(m + 1) < ComplexTable<>::tolerance()) { // 1/sqrt(2) 1/2
-                if (imaginary) {
-                    os << (std::signbit(r) ? "-" : "+") << u8"\u221a\u00bd \u00bdi";
-                } else
-                    os << (std::signbit(r) ? "-" : "") << u8"\u221a\u00bd \u00bd";
+            fraction = getLowestFraction(abssqrt);
+            approx   = static_cast<fp>(fraction.first) / static_cast<fp>(fraction.second);
+            error    = std::abs(abssqrt - approx);
+
+            if (error < tol) { // suitable fraction a/(b * sqrt(2)) found
+                if (phase) {
+                    if (fraction.second == 1U) {
+                        os << " " << fraction.first << "/√2)";
+                    } else if (fraction.first == 1U) {
+                        os << "/(" << fraction.second << "√2))";
+                    } else {
+                        os << " " << fraction.first << "/(" << fraction.second << "√2))";
+                    }
+                } else {
+                    if (fraction.second == 1U) {
+                        os << fraction.first << "/√2";
+                    } else {
+                        os << fraction.first << "/(" << fraction.second << "√2)";
+                    }
+                }
                 return;
             }
 
-            if (std::abs(o + 1) < ComplexTable<>::tolerance()) { // +-pi/2
-                if (imaginary) {
-                    os << (std::signbit(r) ? "-" : "+") << u8"\u00bd \u03c0i";
-                } else
-                    os << (std::signbit(r) ? "-" : "") << u8"\u00bd \u03c0";
+            auto abspi = absr / PI;
+
+            if (std::abs(abspi - 1.) < tol) { // +- π
+                if (phase) {
+                    os << " π)";
+                } else {
+                    os << (std::signbit(r) ? "-" : "") << "π";
+                }
                 return;
             }
 
-            if (std::abs(std::round(n) - n) < ComplexTable<>::tolerance() && n < 0) { // 1/2^n
-                if (imaginary) {
-                    os << (std::signbit(r) ? "-" : "+") << u8"\u00bd\u002a\u002a" << (int)std::round(-n) << "i";
-                } else
-                    os << (std::signbit(r) ? "-" : "") << u8"\u00bd\u002a\u002a" << (int)std::round(-n);
+            fraction = getLowestFraction(abspi);
+            approx   = static_cast<fp>(fraction.first) / static_cast<fp>(fraction.second);
+            error    = std::abs(abspi - approx);
+
+            if (error < tol) { // suitable fraction a/b π found
+                if (phase) {
+                    if (fraction.second == 1U) {
+                        os << " " << fraction.first << "π)";
+                    } else if (fraction.first == 1U) {
+                        os << " π/" << fraction.second << ")";
+                    } else {
+                        os << " " << fraction.first << "π/" << fraction.second << ")";
+                    }
+                } else {
+                    if (fraction.second == 1U) {
+                        os << fraction.first << "π";
+                    } else if (fraction.first == 1U) {
+                        os << "π/" << fraction.second;
+                    } else {
+                        os << fraction.first << "π/" << fraction.second;
+                    }
+                }
                 return;
             }
 
-            if (std::abs(std::round(m) - m) < ComplexTable<>::tolerance() && m < 0) { // 1/sqrt(2) 1/2^m
-                if (imaginary) {
-                    os << (std::signbit(r) ? "-" : "+") << u8"\u221a\u00bd \u00bd\u002a\u002a" << (int)std::round(-m) << "i";
-                } else
-                    os << (std::signbit(r) ? "-" : "") << u8"\u221a\u00bd \u00bd\u002a\u002a" << (int)std::round(-m);
-                return;
-            }
-
-            if (std::abs(std::round(o) - o) < ComplexTable<>::tolerance() && o < 0) { // 1/2^o pi
-                if (imaginary) {
-                    os << (std::signbit(r) ? "-" : "+") << u8"\u00bd\u002a\u002a" << (int)std::round(-o) << u8" \u03c0i";
-                } else
-                    os << (std::signbit(r) ? "-" : "") << u8"\u00bd\u002a\u002a" << (int)std::round(-o) << u8" \u03c0";
-                return;
-            }
-
-            if (imaginary) { // default
-                os << (std::signbit(r) ? "" : "+") << r << "i";
+            if (phase) { // default
+                os << " " << absr << ")";
             } else
                 os << r;
         }
 
-        static std::string toString(const fp& real, const fp& imag, bool formatted = true, int precision = -1) {
+        static std::string toString(const fp& mag, const fp& phase, bool formatted = true, int precision = -1) {
             std::ostringstream ss{};
 
             if (precision >= 0) ss << std::setprecision(precision);
 
-            if (real != 0.) {
-                if (formatted) {
-                    printFormatted(ss, real);
-                } else {
-                    ss << real;
-                }
+            if (std::abs(mag) < MagnitudeTable<>::tolerance()) {
+                return "0";
             }
-            if (imag != 0.) {
-                if (formatted) {
-                    if (real == imag) {
-                        ss << "(1+i)";
-                        return ss.str();
-                    } else if (imag == -real) {
-                        ss << "(1-i)";
-                        return ss.str();
-                    }
-                    printFormatted(ss, imag, true);
-                } else {
-                    if (real == 0.) {
-                        ss << imag;
-                    } else {
-                        if (imag > 0.) {
-                            ss << "+";
-                        }
-                        ss << imag;
-                    }
-                    ss << "i";
-                }
-            }
-            if (real == 0. && imag == 0.) return "0";
 
+            if (formatted) {
+                if (std::abs(std::abs(phase) - 1.0) < PhaseTable<>::tolerance()) {
+                    ss << "-";
+                    ComplexValue::printFormatted(ss, mag);
+                } else {
+                    if (std::abs(mag - 1.0) > MagnitudeTable<>::tolerance()) {
+                        ComplexValue::printFormatted(ss, mag);
+                        if (std::abs(phase) > PhaseTable<>::tolerance()) {
+                            ss << " ";
+                        }
+                    } else if (std::abs(phase) < PhaseTable<>::tolerance()) {
+                        ss << "1";
+                        return ss.str();
+                    }
+                    ComplexValue::printFormatted(ss, phase, true);
+                }
+            } else {
+                ss << mag;
+                if (std::abs(phase) > PhaseTable<>::tolerance()) {
+                    ss << " " << phase;
+                }
+            }
             return ss.str();
         }
 
-        explicit operator auto() const { return std::complex<dd::fp>{r, i}; }
+        explicit operator auto() const { return std::polar(mag, phase * PI); }
 
         ComplexValue& operator+=(const ComplexValue& rhs) {
-            r += rhs.r;
-            i += rhs.i;
+            auto a = std::polar(mag, phase * PI);
+            auto b = std::polar(rhs.mag, rhs.phase * PI);
+            a += b;
+
+            mag   = std::abs(a);
+            phase = std::arg(a) / PI;
             return *this;
         }
 
@@ -210,21 +276,7 @@ namespace dd {
     };
 
     inline std::ostream& operator<<(std::ostream& os, const ComplexValue& c) {
-        if (c.r != 0) {
-            ComplexValue::printFormatted(os, c.r);
-        }
-        if (c.i != 0) {
-            if (c.r == c.i) {
-                os << "(1+i)";
-                return os;
-            } else if (c.i == -c.r) {
-                os << "(1-i)";
-                return os;
-            }
-            ComplexValue::printFormatted(os, c.i, true);
-        }
-        if (c.r == 0 && c.i == 0) os << 0;
-
+        os << ComplexValue::toString(c.mag, std::remainder(c.phase, 2.0));
         return os;
     }
 } // namespace dd
@@ -233,8 +285,8 @@ namespace std {
     template<>
     struct hash<dd::ComplexValue> {
         std::size_t operator()(dd::ComplexValue const& c) const noexcept {
-            auto h1 = dd::murmur64(static_cast<std::size_t>(std::round(c.r / dd::ComplexTable<>::tolerance())));
-            auto h2 = dd::murmur64(static_cast<std::size_t>(std::round(c.i / dd::ComplexTable<>::tolerance())));
+            auto h1 = dd::murmur64(static_cast<std::size_t>(std::round(c.mag / dd::MagnitudeTable<>::tolerance())));
+            auto h2 = dd::murmur64(static_cast<std::size_t>(std::round(c.phase / dd::PhaseTable<>::tolerance())));
             return dd::combineHash(h1, h2);
         }
     };

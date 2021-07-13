@@ -6,7 +6,7 @@
 #ifndef DDpackage_UNARYCOMPUTETABLE_HPP
 #define DDpackage_UNARYCOMPUTETABLE_HPP
 
-#include "Definitions.hpp"
+#include "dd/Definitions.hpp"
 
 #include <array>
 #include <cstddef>

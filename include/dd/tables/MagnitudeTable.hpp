@@ -3,10 +3,10 @@
  * See file README.md or go to http://iic.jku.at/eda/research/quantum_dd/ for more information.
  */
 
-#ifndef DD_PACKAGE_COMPLEXTABLE_HPP
-#define DD_PACKAGE_COMPLEXTABLE_HPP
+#ifndef DD_PACKAGE_MAGNITUDETABLE_HPP
+#define DD_PACKAGE_MAGNITUDETABLE_HPP
 
-#include "Definitions.hpp"
+#include "dd/Definitions.hpp"
 
 #include <algorithm>
 #include <array>
@@ -22,47 +22,16 @@
 #include <vector>
 
 namespace dd {
-    template<std::size_t NBUCKET = 32768, std::size_t INITIAL_ALLOCATION_SIZE = 2048, std::size_t GROWTH_FACTOR = 2, std::size_t INITIAL_GC_LIMIT = 65536>
-    class ComplexTable {
+    template<std::size_t NBUCKET = 65537, std::size_t INITIAL_ALLOCATION_SIZE = 2048, std::size_t GROWTH_FACTOR = 2, std::size_t INITIAL_GC_LIMIT = 65536>
+    class MagnitudeTable {
     public:
         struct Entry {
             fp       value{};
             Entry*   next{};
             RefCount refCount{};
 
-            ///
-            /// The sign of number is encoded in the least significant bit of its entry pointer
-            /// If not handled properly, this causes misaligned access
-            /// These routines allow to obtain safe pointers
-            ///
-            [[nodiscard]] static inline Entry* getAlignedPointer(const Entry* e) {
-                return reinterpret_cast<Entry*>(reinterpret_cast<std::uintptr_t>(e) & (~1ULL));
-            }
-
-            [[nodiscard]] static inline Entry* getNegativePointer(const Entry* e) {
-                return reinterpret_cast<Entry*>(reinterpret_cast<std::uintptr_t>(e) | 1ULL);
-            }
-
-            [[nodiscard]] static inline Entry* flipPointerSign(const Entry* e) {
-                return reinterpret_cast<Entry*>(reinterpret_cast<std::uintptr_t>(e) ^ 1ULL);
-            }
-
-            [[nodiscard]] static inline bool isNegativePointer(const Entry* e) {
-                return reinterpret_cast<std::uintptr_t>(e) & 1ULL;
-            }
-
             [[nodiscard]] static inline fp val(const Entry* e) {
-                if (isNegativePointer(e)) {
-                    return -getAlignedPointer(e)->value;
-                }
                 return e->value;
-            }
-
-            [[nodiscard]] static inline RefCount ref(const Entry* e) {
-                if (isNegativePointer(e)) {
-                    return -getAlignedPointer(e)->refCount;
-                }
-                return e->refCount;
             }
 
             [[nodiscard]] static inline bool approximatelyEquals(const Entry* left, const Entry* right) {
@@ -87,7 +56,7 @@ namespace dd {
         static inline Entry sqrt2_2{SQRT2_2, nullptr, 1};
         static inline Entry one{1., nullptr, 1};
 
-        ComplexTable():
+        MagnitudeTable():
             chunkID(0), allocationSize(INITIAL_ALLOCATION_SIZE), gcLimit(INITIAL_GC_LIMIT) {
             // allocate first chunk of numbers
             chunks.emplace_back(allocationSize);
@@ -100,7 +69,7 @@ namespace dd {
             lookup(0.5L)->refCount++;
         }
 
-        ~ComplexTable() = default;
+        ~MagnitudeTable() = default;
 
         static fp tolerance() {
             return TOLERANCE;
@@ -134,9 +103,11 @@ namespace dd {
 
         Entry* lookup(const fp& val) {
             assert(!std::isnan(val));
-            assert(val >= 0); // required anyway for the hash function
+            if (val < 0) {
+                throw std::runtime_error("Magnitude cannot be negative.");
+            }
             ++lookups;
-            if (std::abs(val) < TOLERANCE) {
+            if (val < TOLERANCE) {
                 ++hits;
                 return &zero;
             }
@@ -228,10 +199,7 @@ namespace dd {
         }
 
         // increment reference count for corresponding entry
-        static void incRef(Entry* entry) {
-            // get valid pointer
-            auto entryPtr = Entry::getAlignedPointer(entry);
-
+        static void incRef(Entry* entryPtr) {
             if (entryPtr == nullptr)
                 return;
 
@@ -249,10 +217,7 @@ namespace dd {
         }
 
         // decrement reference count for corresponding entry
-        static void decRef(Entry* entry) {
-            // get valid pointer
-            auto entryPtr = Entry::getAlignedPointer(entry);
-
+        static void decRef(Entry* entryPtr) {
             if (entryPtr == nullptr)
                 return;
 
@@ -262,7 +227,7 @@ namespace dd {
                     return;
                 }
                 if (entryPtr->refCount == 0) {
-                    throw std::runtime_error("In ComplexTable: RefCount of entry " + std::to_string(entryPtr->value) +
+                    throw std::runtime_error("In ComputeTable: RefCount of entry " + std::to_string(entryPtr->value) +
                                              " is zero before decrement");
                 }
 
@@ -419,6 +384,23 @@ namespace dd {
             return os;
         }
 
+        std::ostream& printBucketDistribution(std::ostream& os = std::cout) {
+            for (auto bucket: table) {
+                if (bucket == nullptr) {
+                    os << "0\n";
+                    continue;
+                }
+                std::size_t bucketCount = 0;
+                while (bucket != nullptr) {
+                    ++bucketCount;
+                    bucket = bucket->next;
+                }
+                os << bucketCount << "\n";
+            }
+            os << std::endl;
+            return os;
+        }
+
     private:
         using Bucket = Entry*;
         using Table  = std::array<Bucket, NBUCKET>;
@@ -542,4 +524,4 @@ namespace dd {
         }
     };
 } // namespace dd
-#endif //DD_PACKAGE_COMPLEXTABLE_HPP
+#endif //DD_PACKAGE_MAGNITUDETABLE_HPP

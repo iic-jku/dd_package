@@ -6,7 +6,7 @@
 #ifndef DDpackage_NOISEOPERATIONTABLE_HPP
 #define DDpackage_NOISEOPERATIONTABLE_HPP
 
-#include "Definitions.hpp"
+#include "dd/Definitions.hpp"
 
 #include <array>
 #include <cstddef>

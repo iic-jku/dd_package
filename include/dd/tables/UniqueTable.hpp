@@ -6,9 +6,9 @@
 #ifndef DDpackage_UNIQUETABLE_HPP
 #define DDpackage_UNIQUETABLE_HPP
 
-#include "ComplexNumbers.hpp"
-#include "Definitions.hpp"
-#include "Edge.hpp"
+#include "dd/ComplexNumbers.hpp"
+#include "dd/Definitions.hpp"
+#include "dd/Edge.hpp"
 
 #include <algorithm>
 #include <array>
@@ -316,9 +316,9 @@ namespace dd {
                         std::cout << "\t\t" << std::hex << reinterpret_cast<std::uintptr_t>(p) << std::dec << " "
                                   << p->ref << std::hex;
                         for (const auto& e: p->e) {
-                            std::cout << " p" << reinterpret_cast<std::uintptr_t>(e.p) << "(r"
-                                      << reinterpret_cast<std::uintptr_t>(e.w.r) << " i"
-                                      << reinterpret_cast<std::uintptr_t>(e.w.i) << ")";
+                            std::cout << " p" << reinterpret_cast<std::uintptr_t>(e.p) << "(mag: "
+                                      << reinterpret_cast<std::uintptr_t>(e.w.mag) << ", phase: "
+                                      << reinterpret_cast<std::uintptr_t>(e.w.phase) << ")";
                         }
                         std::cout << std::dec << "\n";
                         p = p->next;

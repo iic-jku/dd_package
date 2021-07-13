@@ -10,12 +10,16 @@
 #include <iostream>
 #include <memory>
 
+using namespace dd::literals;
+
 auto BellCicuit1(std::unique_ptr<dd::Package>& dd) {
     /***** define Hadamard gate acting on q0 *****/
     auto h_gate = dd->makeGateDD(dd::Hmat, 2, 0);
+    dd::export2Dot(h_gate, "h_gate.dot", true, true, true);
 
     /***** define cx gate with control q0 and target q1 *****/
-    auto cx_gate = dd->makeGateDD(dd::Xmat, 2, 0, 1);
+    auto cx_gate = dd->makeGateDD(dd::Xmat, 2, 0_pc, 1);
+    dd::export2Dot(cx_gate, "cx_gate.dot", true, true, true);
 
     //Multiply matrices to get functionality of circuit
     return dd->multiply(cx_gate, h_gate);
@@ -24,12 +28,15 @@ auto BellCicuit1(std::unique_ptr<dd::Package>& dd) {
 auto BellCicuit2(std::unique_ptr<dd::Package>& dd) {
     /***** define Hadamard gate acting on q1 *****/
     auto h_gate_q1 = dd->makeGateDD(dd::Hmat, 2, 1);
+    dd::export2Dot(h_gate_q1, "h_gate_q1.dot", true, true, true);
 
     /***** define Hadamard gate acting on q0 *****/
     auto h_gate_q0 = dd->makeGateDD(dd::Hmat, 2, 0);
+    dd::export2Dot(h_gate_q0, "h_gate_q0.dot", true, true, true);
 
     /***** define cx gate with control q1 and target q0 *****/
-    auto cx_gate = dd->makeGateDD(dd::Xmat, 2, 1, 0);
+    auto cx_gate = dd->makeGateDD(dd::Xmat, 2, 1_pc, 0);
+    dd::export2Dot(cx_gate, "cx_gate_rev.dot", true, true, true);
 
     //Multiply matrices to get functionality of circuit
     return dd->multiply(dd->multiply(h_gate_q1, h_gate_q0), dd->multiply(cx_gate, h_gate_q1));
@@ -73,7 +80,7 @@ int main() {
     m[0] = {1., 0.};
     m[1] = {0., 0.};
     m[2] = {0., 0.};
-    m[3] = {-1., 0.};
+    m[3] = {1., 1.};
 
     auto my_z_gate = dd->makeGateDD(m, 1, 0);
     std::cout << "DD of my gate has size " << dd->size(my_z_gate) << std::endl;
@@ -84,8 +91,8 @@ int main() {
     std::cout << "Identity function for 4 qubits has trace: " << fullTrace << std::endl;
 
     /***** print DDs as SVG file *****/
-    dd::export2Dot(bell_circuit1, "bell_circuit1.dot", false);
-    dd::export2Dot(bell_circuit2, "bell_circuit2.dot");
+    dd::export2Dot(bell_circuit1, "bell_circuit1.dot", true, true, true);
+    dd::export2Dot(bell_circuit2, "bell_circuit2.dot", true, true, true);
     dd::export2Dot(bell_state, "bell_state.dot", true);
     dd::export2Dot(partTrace, "partial_trace.dot");
 

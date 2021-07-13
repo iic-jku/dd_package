@@ -47,13 +47,14 @@ namespace dd {
 
     static constexpr fp SQRT2_2 = 0.707106781186547524400844362104849039284835937688474036588L;
     static constexpr fp PI      = 3.141592653589793238462643383279502884197169399375105820974L;
+    static constexpr fp PIinv   = 0.318309886183790671537767526745028724L;
     static constexpr fp PI_2    = 1.570796326794896619231321691639751442098584699687552910487L;
     static constexpr fp PI_4    = 0.785398163397448309615660845819875721049292349843776455243L;
 
     using CVec = std::vector<std::complex<dd::fp>>;
     using CMat = std::vector<CVec>;
 
-    static constexpr std::uint_least64_t SERIALIZATION_VERSION = 1;
+    static constexpr std::uint_least64_t SERIALIZATION_VERSION = 2;
 
     // 64bit mixing hash (from MurmurHash3, https://github.com/aappleby/smhasher/blob/master/src/MurmurHash3.cpp)
     constexpr std::size_t murmur64(std::size_t k) {
